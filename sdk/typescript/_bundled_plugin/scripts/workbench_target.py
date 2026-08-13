@@ -615,10 +615,30 @@ def require_git_worktree_head(target: Path) -> str:
 
 
 def scan_target_warning(scan: sqlite3.Row) -> str | None:
-    if scan["diff_target_kind"] != "working_tree" and not scan["target_snapshot_digest"]:
+    committed_diff = scan["diff_target_kind"] in ("commit", "range")
+    if (
+        not committed_diff
+        and scan["diff_target_kind"] != "working_tree"
+        and not scan["target_snapshot_digest"]
+    ):
         return None
     try:
         target = require_scan_target_identity(scan)
+        if committed_diff:
+            expected_digest = scan["diff_content_digest"]
+            if not expected_digest:
+                return None
+            current_digest = committed_diff_content_digest(
+                target,
+                scan["diff_base_revision"],
+                scan["diff_head_revision"],
+            )
+            if current_digest != expected_digest:
+                return (
+                    "Committed changes changed while the scan was running; "
+                    "results were saved for the original snapshot."
+                )
+            return None
         if scan["target_revision"] == "unversioned":
             if (
                 directory_content_digest(target, excluded=(Path(scan["scan_dir"]),))

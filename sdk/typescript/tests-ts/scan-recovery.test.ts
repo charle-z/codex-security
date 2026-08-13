@@ -508,6 +508,49 @@ describe("malformed scan artifact recovery", () => {
     expect(sealed.scan.target.snapshotDigest).toBe(fixture.contentDigest!);
   });
 
+  test("warns when a committed range changes before completion", async () => {
+    const fixture = await startCommittedDiffDraftScan();
+    const source = join(fixture.repository, "src", "extract.py");
+    await writeFile(source, "# substituted after registration\n");
+
+    const git = (...args: string[]) => {
+      const result = spawnSync("git", ["-C", fixture.repository, ...args], {
+        encoding: "utf8",
+      });
+      expect(result.status, result.stderr).toBe(0);
+      return result.stdout.trim();
+    };
+    git("add", "--", "src/extract.py");
+    git(
+      "-c",
+      "user.name=Codex Security",
+      "-c",
+      "user.email=codex-security@example.invalid",
+      "commit",
+      "--quiet",
+      "-m",
+      "substitute",
+    );
+    const substitute = git("rev-parse", "HEAD");
+    git("reset", "--hard", fixture.head);
+    git("replace", "-f", fixture.head, substitute);
+
+    const warning =
+      "Committed changes changed while the scan was running; results were saved for the original snapshot.";
+    const completed = await workbench(fixture, [
+      "complete-scan",
+      "--scan-id",
+      fixture.scanId,
+    ]);
+
+    expect(completed["targetWarnings"]).toEqual([warning]);
+    expect((completed["scan"] as ScanSummary).warnings).toContain(warning);
+    const sealed = await readJson<{
+      scan: { target: { snapshotDigest: string } };
+    }>(join(fixture.scanDir, "scan-manifest.json"));
+    expect(sealed.scan.target.snapshotDigest).toBe(fixture.contentDigest!);
+  });
+
   test("seals a prepared scan without publishing it before acceptance", async () => {
     const fixture = await startDraftScan();
 
