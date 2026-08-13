@@ -17,7 +17,7 @@ jobs:
       matrix:
         include:
           - candidate: issue-425
-            sha: d39f34136fb5b4d193e037d9797584726a1a5534
+            sha: de3fe68d3c8e0b131e1272ff52f3dbd2c3903d42
           - candidate: issue-379
             sha: 67c417acee2cdfe3b5f7daeb37327c8b32a0fbf4
     env:
@@ -55,7 +55,7 @@ jobs:
         go-version: [1.25.x, 1.26.x]
         include:
           - candidate: issue-425
-            sha: d39f34136fb5b4d193e037d9797584726a1a5534
+            sha: de3fe68d3c8e0b131e1272ff52f3dbd2c3903d42
           - candidate: issue-379
             sha: 67c417acee2cdfe3b5f7daeb37327c8b32a0fbf4
     env:
