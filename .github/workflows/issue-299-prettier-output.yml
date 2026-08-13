@@ -1,0 +1,38 @@
+name: issue-299-prettier-output
+
+on:
+  push:
+    branches: [validation/issue-299-full]
+
+permissions:
+  contents: read
+
+jobs:
+  prettier:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          package_json_file: sdk/typescript/package.json
+
+      - name: Set up Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6
+        with:
+          node-version: "22.13.0"
+
+      - name: Install dependencies
+        run: pnpm --dir sdk/typescript install --frozen-lockfile
+
+      - name: Show exact Prettier diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm --dir sdk/typescript exec prettier --write tests-ts/compact-diff-scan.test.ts
+          git diff -- sdk/typescript/tests-ts/compact-diff-scan.test.ts
