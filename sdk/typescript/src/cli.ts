@@ -254,10 +254,10 @@ async function readPromptFiles(
   const [scanPrompt, postScanPrompt] = await Promise.all([
     scanPromptFile === undefined
       ? undefined
-      : readFile(resolve(directory, scanPromptFile), "utf8"),
+      : readFile(resolveCliPath(directory, scanPromptFile), "utf8"),
     postScanPromptFile === undefined
       ? undefined
-      : readFile(resolve(directory, postScanPromptFile), "utf8"),
+      : readFile(resolveCliPath(directory, postScanPromptFile), "utf8"),
   ]);
   return {
     ...(scanPrompt?.trim() ? { scanPrompt } : {}),
@@ -840,7 +840,7 @@ export async function main(
     }),
     output: z.record(z.string(), z.unknown()).optional(),
     async run({ args, format }) {
-      const repository = resolve(
+      const repository = resolveCliPath(
         dependencies.currentDirectory(),
         args.repository ?? ".",
       );

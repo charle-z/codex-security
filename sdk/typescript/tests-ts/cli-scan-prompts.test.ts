@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import * as os from "node:os";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, mock, test } from "bun:test";
 import { main } from "../src/cli.js";
 import { capture, dependencies } from "./cli-fixtures.js";
 
@@ -108,6 +109,50 @@ describe("CLI scan prompts", () => {
       });
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  test("expands ~ in scan prompt file paths", async () => {
+    const home = await mkdtemp(join(tmpdir(), "codex-security-cli-home-"));
+    const currentDirectory = await mkdtemp(
+      join(tmpdir(), "codex-security-cli-current-"),
+    );
+    mock.module("node:os", () => ({ ...os, homedir: () => home }));
+    try {
+      await Promise.all([
+        writeFile(join(home, "scan.md"), "Review home-expanded input.\n"),
+        writeFile(join(home, "follow-up.md"), "Verify home-expanded output.\n"),
+      ]);
+      let options: unknown;
+      expect(
+        await main(
+          [
+            "scan",
+            ".",
+            "--scan-prompt-file",
+            "~/scan.md",
+            "--post-scan-prompt-file",
+            "~/follow-up.md",
+            "--json",
+          ],
+          capture().stream,
+          capture().stream,
+          dependencies({
+            currentDirectory,
+            onTurn: (_repository, value) => (options = value),
+          }),
+        ),
+      ).toBe(0);
+      expect(options).toMatchObject({
+        scanPrompt: "Review home-expanded input.\n",
+        postScanPrompt: "Verify home-expanded output.\n",
+      });
+    } finally {
+      mock.module("node:os", () => os);
+      await Promise.all([
+        rm(home, { recursive: true, force: true }),
+        rm(currentDirectory, { recursive: true, force: true }),
+      ]);
     }
   });
 });

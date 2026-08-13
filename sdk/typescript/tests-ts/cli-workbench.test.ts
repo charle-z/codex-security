@@ -158,6 +158,43 @@ describe("CLI workbench", () => {
     }
   });
 
+  test("expands ~ in the findings list repository argument", async () => {
+    const home = await mkdtemp(join(tmpdir(), "codex-security-cli-tilde-"));
+    mock.module("node:os", () => ({ ...os, homedir: () => home }));
+    try {
+      const repository = resolve(home, "project");
+      const stdout = capture();
+      const calls: Array<readonly string[]> = [];
+      expect(
+        await main(
+          ["findings", "list", "~/project", "--json"],
+          stdout.stream,
+          capture().stream,
+          dependencies({
+            onWorkbench: (args): JsonObject => {
+              calls.push(args);
+              return args[0] === "list-repositories"
+                ? {
+                    repositories: [
+                      { targetId: "selected", targetPath: repository },
+                    ],
+                  }
+                : { findings: [], nextOffset: null };
+            },
+          }),
+        ),
+      ).toBe(0);
+      expect(calls).toEqual([
+        ["list-repositories"],
+        ["list-global-findings", "--target-id", "selected", "--status", "open"],
+      ]);
+      expect(JSON.parse(stdout.text())).toEqual({ repository, findings: [] });
+    } finally {
+      mock.module("node:os", () => os);
+      await rm(home, { recursive: true, force: true });
+    }
+  });
+
   test("shows scans and returns cached comparisons with one workbench call", async () => {
     const cases: Array<[string[], string[], JsonObject, JsonObject]> = [
       [
