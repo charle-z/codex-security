@@ -116,6 +116,49 @@ async function workbench(fixture: Fixture, args: readonly string[]) {
   );
 }
 
+function storedDiffDigest(fixture: Fixture, scanId: string): string | null {
+  const result = spawnSync(
+    fixture.python,
+    [
+      "-I",
+      "-B",
+      "-c",
+      [
+        "import json, sqlite3, sys",
+        "connection = sqlite3.connect(sys.argv[1])",
+        "value = connection.execute('SELECT diff_content_digest FROM scans WHERE id = ?', (sys.argv[2],)).fetchone()[0]",
+        "print(json.dumps(value))",
+      ].join("\n"),
+      join(fixture.stateDir, "workbench.sqlite3"),
+      scanId,
+    ],
+    { encoding: "utf8" },
+  );
+  expect(result.status, result.stderr).toBe(0);
+  return JSON.parse(result.stdout) as string | null;
+}
+
+function clearStoredDiffDigest(fixture: Fixture, scanId: string): void {
+  const result = spawnSync(
+    fixture.python,
+    [
+      "-I",
+      "-B",
+      "-c",
+      [
+        "import sqlite3, sys",
+        "connection = sqlite3.connect(sys.argv[1])",
+        "connection.execute('UPDATE scans SET diff_content_digest = NULL WHERE id = ?', (sys.argv[2],))",
+        "connection.commit()",
+      ].join("\n"),
+      join(fixture.stateDir, "workbench.sqlite3"),
+      scanId,
+    ],
+    { encoding: "utf8" },
+  );
+  expect(result.status, result.stderr).toBe(0);
+}
+
 async function inspectDiff(
   fixture: Fixture,
   kind: "commit" | "range" | "working_tree",
@@ -241,6 +284,9 @@ describe("diff snapshot digests", () => {
     expect(contract.diffTarget.contentDigest).toBe(expectedDigest);
 
     const scanId = String(registration["scanId"]);
+    expect(storedDiffDigest(fixture, scanId)).toBe(expectedDigest);
+    clearStoredDiffDigest(fixture, scanId);
+    expect(storedDiffDigest(fixture, scanId)).toBeNull();
     await cp(
       join(PLUGIN_ROOT, "examples", "completed-scan"),
       fixture.scanDir,
@@ -257,6 +303,7 @@ describe("diff snapshot digests", () => {
     }>(manifestPath);
     manifest.scan.id = scanId;
     manifest.scan.target.kind = "git_diff";
+    delete manifest.scan.target.snapshotDigest;
     delete manifest.scan.sealedAt;
     delete manifest.scan.artifacts;
     await writeJson(manifestPath, manifest);
